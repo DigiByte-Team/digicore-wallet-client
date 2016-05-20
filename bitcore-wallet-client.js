@@ -12,7 +12,7 @@ var $ = require('preconditions').singleton();
 var util = require('util');
 var async = require('async');
 var events = require('events');
-var Bitcore = require('bitcore-lib');
+var Digicore = require('digicore-lib');
 var sjcl = require('sjcl');
 var url = require('url');
 var querystring = require('querystring');
@@ -513,11 +513,11 @@ API.prototype.decryptBIP38PrivateKey = function(encryptedPrivateKeyBase58, passp
     return cb(new Error('Could not decrypt BIP38 private key', ex));
   }
 
-  var privateKey = new Bitcore.PrivateKey(privateKeyWif);
+  var privateKey = new Digicore.PrivateKey(privateKeyWif);
   var address = privateKey.publicKey.toAddress().toString();
   var addrBuff = new Buffer(address, 'ascii');
-  var actualChecksum = Bitcore.crypto.Hash.sha256sha256(addrBuff).toString('hex').substring(0, 8);
-  var expectedChecksum = Bitcore.encoding.Base58Check.decode(encryptedPrivateKeyBase58).toString('hex').substring(6, 14);
+  var actualChecksum = Digicore.crypto.Hash.sha256sha256(addrBuff).toString('hex').substring(0, 8);
+  var expectedChecksum = Digicore.encoding.Base58Check.decode(encryptedPrivateKeyBase58).toString('hex').substring(6, 14);
 
   if (actualChecksum != expectedChecksum)
     return cb(new Error('Incorrect passphrase'));
@@ -528,7 +528,7 @@ API.prototype.decryptBIP38PrivateKey = function(encryptedPrivateKeyBase58, passp
 API.prototype.getBalanceFromPrivateKey = function(privateKey, cb) {
   var self = this;
 
-  var privateKey = new Bitcore.PrivateKey(privateKey);
+  var privateKey = new Digicore.PrivateKey(privateKey);
   var address = privateKey.publicKey.toAddress();
   self.getUtxos({
     addresses: address.toString(),
@@ -543,7 +543,7 @@ API.prototype.buildTxFromPrivateKey = function(privateKey, destinationAddress, o
 
   opts = opts || {};
 
-  var privateKey = new Bitcore.PrivateKey(privateKey);
+  var privateKey = new Digicore.PrivateKey(privateKey);
   var address = privateKey.publicKey.toAddress();
 
   async.waterfall([
@@ -564,9 +564,9 @@ API.prototype.buildTxFromPrivateKey = function(privateKey, destinationAddress, o
 
       var tx;
       try {
-        var toAddress = Bitcore.Address.fromString(destinationAddress);
+        var toAddress = Digicore.Address.fromString(destinationAddress);
 
-        tx = new Bitcore.Transaction()
+        tx = new Digicore.Transaction()
           .from(utxos)
           .to(toAddress, amount)
           .fee(fee)
@@ -747,10 +747,10 @@ API.prototype._doDeleteRequest = function(url, cb) {
 
 API._buildSecret = function(walletId, walletPrivKey, network) {
   if (_.isString(walletPrivKey)) {
-    walletPrivKey = Bitcore.PrivateKey.fromString(walletPrivKey);
+    walletPrivKey = Digicore.PrivateKey.fromString(walletPrivKey);
   }
   var widHex = new Buffer(walletId.replace(/-/g, ''), 'hex');
-  var widBase58 = new Bitcore.encoding.Base58(widHex).toString();
+  var widBase58 = new Digicore.encoding.Base58(widHex).toString();
   return _.padRight(widBase58, 22, '0') + walletPrivKey.toWIF() + (network == 'testnet' ? 'T' : 'L');
 };
 
@@ -771,10 +771,10 @@ API.parseSecret = function(secret) {
   try {
     var secretSplit = split(secret, [22, 74]);
     var widBase58 = secretSplit[0].replace(/0/g, '');
-    var widHex = Bitcore.encoding.Base58.decode(widBase58).toString('hex');
+    var widHex = Digicore.encoding.Base58.decode(widBase58).toString('hex');
     var walletId = split(widHex, [8, 12, 16, 20]).join('-');
 
-    var walletPrivKey = Bitcore.PrivateKey.fromString(secretSplit[1]);
+    var walletPrivKey = Digicore.PrivateKey.fromString(secretSplit[1]);
     var networkChar = secretSplit[2];
 
     return {
@@ -788,7 +788,7 @@ API.parseSecret = function(secret) {
 };
 
 API.buildTx = function(txp) {
-  var t = new Bitcore.Transaction();
+  var t = new Digicore.Transaction();
 
   $.checkState(_.contains(_.values(Constants.SCRIPT_TYPES), txp.addressType));
 
@@ -809,7 +809,7 @@ API.buildTx = function(txp) {
     _.each(txp.outputs, function(o) {
       $.checkState(o.script || o.toAddress, 'Output should have either toAddress or script specified');
       if (o.script) {
-        t.addOutput(new Bitcore.Transaction.Output({
+        t.addOutput(new Digicore.Transaction.Output({
           script: o.script,
           satoshis: o.amount
         }));
@@ -820,7 +820,7 @@ API.buildTx = function(txp) {
   }
 
   if (_.startsWith(txp.version, '1.')) {
-    Bitcore.Transaction.FEE_SECURITY_MARGIN = 1;
+    Digicore.Transaction.FEE_SECURITY_MARGIN = 1;
     t.feePerKb(txp.feePerKb);
   } else {
     t.fee(txp.fee);
@@ -841,7 +841,7 @@ API.buildTx = function(txp) {
     });
   }
 
-  // Validate inputs vs outputs independently of Bitcore
+  // Validate inputs vs outputs independently of Digicore
   var totalInputs = _.reduce(txp.inputs, function(memo, i) {
     return +i.satoshis + memo;
   }, 0);
@@ -860,7 +860,7 @@ API.signTxp = function(txp, derivedXPrivKey) {
   var privs = [];
   var derived = {};
 
-  var xpriv = new Bitcore.HDPrivateKey(derivedXPrivKey);
+  var xpriv = new Digicore.HDPrivateKey(derivedXPrivKey);
 
   _.each(txp.inputs, function(i) {
     if (!derived[i.path]) {
@@ -1100,12 +1100,12 @@ API.prototype.createWallet = function(walletName, copayerName, m, n, opts, cb) {
     return cb(new Error('Existing keys were created for a different network'));
   }
 
-  var walletPrivKey = opts.walletPrivKey || new Bitcore.PrivateKey();
+  var walletPrivKey = opts.walletPrivKey || new Digicore.PrivateKey();
   var args = {
     name: walletName,
     m: m,
     n: n,
-    pubKey: (new Bitcore.PrivateKey(walletPrivKey)).toPublicKey().toString(),
+    pubKey: (new Digicore.PrivateKey(walletPrivKey)).toPublicKey().toString(),
     network: network,
     id: opts.id,
   };
@@ -1190,7 +1190,7 @@ API.prototype.recreateWallet = function(cb) {
       log.info('Wallet is already created');
       return cb();
     };
-    var walletPrivKey = Bitcore.PrivateKey.fromString(self.credentials.walletPrivKey);
+    var walletPrivKey = Digicore.PrivateKey.fromString(self.credentials.walletPrivKey);
     var walletId = self.credentials.walletId;
     var supportBIP44AndP2PKH = self.credentials.derivationStrategy != Constants.DERIVATION_STRATEGIES.BIP45;
 
@@ -1989,10 +1989,10 @@ API.prototype.createWalletFromOldCopay = function(username, password, blob, cb) 
 API.prototype.addAccess = function(opts, cb) {
   $.checkState(this.credentials && this.credentials.canSign());
 
-  var reqPrivKey = new Bitcore.PrivateKey(opts.generateNewKey ? null : this.credentials.requestPrivKey);
+  var reqPrivKey = new Digicore.PrivateKey(opts.generateNewKey ? null : this.credentials.requestPrivKey);
   var requestPubKey = reqPrivKey.toPublicKey().toString();
 
-  var xPriv = new Bitcore.HDPrivateKey(this.credentials.xPrivKey)
+  var xPriv = new Digicore.HDPrivateKey(this.credentials.xPrivKey)
     .derive(this.credentials.getBaseAddressDerivationPath());
   var sig = Utils.signRequestPubKey(requestPubKey, xPriv);
   var copayerId = this.credentials.copayerId;
@@ -2015,7 +2015,7 @@ API.prototype.addAccess = function(opts, cb) {
 module.exports = API;
 
 }).call(this,require('_process'),require("buffer").Buffer)
-},{"../package.json":527,"./common":5,"./credentials":7,"./errors/clienterror":8,"./errors/errordefinitions":9,"./log":11,"./paypro":12,"./verifier":13,"_process":399,"async":14,"bip38":15,"bitcore-lib":64,"browser-request":176,"buffer":193,"events":389,"json-stable-stringify":422,"lodash":426,"preconditions":427,"querystring":403,"request":432,"sjcl":526,"url":417,"util":419}],3:[function(require,module,exports){
+},{"../package.json":527,"./common":5,"./credentials":7,"./errors/clienterror":8,"./errors/errordefinitions":9,"./log":11,"./paypro":12,"./verifier":13,"_process":399,"async":14,"bip38":15,"digicore-lib":64,"browser-request":176,"buffer":193,"events":389,"json-stable-stringify":422,"lodash":426,"preconditions":427,"querystring":403,"request":432,"sjcl":526,"url":417,"util":419}],3:[function(require,module,exports){
 'use strict';
 
 var Constants = {};
@@ -2078,12 +2078,12 @@ var $ = require('preconditions').singleton();
 var sjcl = require('sjcl');
 var Stringify = require('json-stable-stringify');
 
-var Bitcore = require('bitcore-lib');
-var Address = Bitcore.Address;
-var PrivateKey = Bitcore.PrivateKey;
-var PublicKey = Bitcore.PublicKey;
-var crypto = Bitcore.crypto;
-var encoding = Bitcore.encoding;
+var Digicore = require('digicore-lib');
+var Address = Digicore.Address;
+var PrivateKey = Digicore.PrivateKey;
+var PublicKey = Digicore.PublicKey;
+var crypto = Digicore.crypto;
+var encoding = Digicore.encoding;
 
 var Constants = require('./constants');
 
@@ -2108,7 +2108,7 @@ Utils.hashMessage = function(text) {
   $.checkArgument(text);
   var buf = new Buffer(text);
   var ret = crypto.Hash.sha256sha256(buf);
-  ret = new Bitcore.encoding.BufferReader(ret).readReverse();
+  ret = new Digicore.encoding.BufferReader(ret).readReverse();
   return ret;
 };
 
@@ -2141,9 +2141,9 @@ Utils.verifyMessage = function(text, signature, pubKey) {
 
 Utils.privateKeyToAESKey = function(privKey) {
   $.checkArgument(privKey && _.isString(privKey));
-  $.checkArgument(Bitcore.PrivateKey.isValid(privKey), 'The private key received is invalid');
-  var pk = Bitcore.PrivateKey.fromString(privKey);
-  return Bitcore.crypto.Hash.sha256(pk.toBuffer()).slice(0, 16).toString('base64');
+  $.checkArgument(Digicore.PrivateKey.isValid(privKey), 'The private key received is invalid');
+  var pk = Digicore.PrivateKey.fromString(privKey);
+  return Digicore.crypto.Hash.sha256(pk.toBuffer()).slice(0, 16).toString('base64');
 };
 
 Utils.getCopayerHash = function(name, xPubKey, requestPubKey) {
@@ -2167,23 +2167,23 @@ Utils.deriveAddress = function(scriptType, publicKeyRing, path, m, network) {
   $.checkArgument(_.contains(_.values(Constants.SCRIPT_TYPES), scriptType));
 
   var publicKeys = _.map(publicKeyRing, function(item) {
-    var xpub = new Bitcore.HDPublicKey(item.xPubKey);
+    var xpub = new Digicore.HDPublicKey(item.xPubKey);
     return xpub.derive(path).publicKey;
   });
 
-  var bitcoreAddress;
+  var digicoreAddress;
   switch (scriptType) {
     case Constants.SCRIPT_TYPES.P2SH:
-      bitcoreAddress = Address.createMultisig(publicKeys, m, network);
+      digicoreAddress = Address.createMultisig(publicKeys, m, network);
       break;
     case Constants.SCRIPT_TYPES.P2PKH:
       $.checkState(_.isArray(publicKeys) && publicKeys.length == 1);
-      bitcoreAddress = Address.fromPublicKey(publicKeys[0], network);
+      digicoreAddress = Address.fromPublicKey(publicKeys[0], network);
       break;
   }
 
   return {
-    address: bitcoreAddress.toString(),
+    address: digicoreAddress.toString(),
     path: path,
     publicKeys: _.invoke(publicKeys, 'toString'),
   };
@@ -2195,12 +2195,12 @@ Utils.xPubToCopayerId = function(xpub) {
 };
 
 Utils.signRequestPubKey = function(requestPubKey, xPrivKey) {
-  var priv = new Bitcore.HDPrivateKey(xPrivKey).derive(Constants.PATHS.REQUEST_KEY_AUTH).privateKey;
+  var priv = new Digicore.HDPrivateKey(xPrivKey).derive(Constants.PATHS.REQUEST_KEY_AUTH).privateKey;
   return Utils.signMessage(requestPubKey, priv);
 };
 
 Utils.verifyRequestPubKey = function(requestPubKey, signature, xPubKey) {
-  var pub = (new Bitcore.HDPublicKey(xPubKey)).derive(Constants.PATHS.REQUEST_KEY_AUTH).publicKey;
+  var pub = (new Digicore.HDPublicKey(xPubKey)).derive(Constants.PATHS.REQUEST_KEY_AUTH).publicKey;
   return Utils.verifyMessage(requestPubKey, signature, pub.toString());
 };
 
@@ -2233,15 +2233,15 @@ Utils.formatAmount = function(satoshis, unit, opts) {
 module.exports = Utils;
 
 }).call(this,require("buffer").Buffer)
-},{"./constants":3,"bitcore-lib":64,"buffer":193,"json-stable-stringify":422,"lodash":426,"preconditions":427,"sjcl":526}],7:[function(require,module,exports){
+},{"./constants":3,"digicore-lib":64,"buffer":193,"json-stable-stringify":422,"lodash":426,"preconditions":427,"sjcl":526}],7:[function(require,module,exports){
 (function (Buffer){
 'use strict';
 
 var $ = require('preconditions').singleton();
 var _ = require('lodash');
 
-var Bitcore = require('bitcore-lib');
-var Mnemonic = require('bitcore-mnemonic');
+var Digicore = require('digicore-lib');
+var Mnemonic = require('digicore-mnemonic');
 var sjcl = require('sjcl');
 
 var Common = require('./common');
@@ -2291,7 +2291,7 @@ Credentials.create = function(network) {
   var x = new Credentials();
 
   x.network = network;
-  x.xPrivKey = (new Bitcore.HDPrivateKey(network)).toString();
+  x.xPrivKey = (new Digicore.HDPrivateKey(network)).toString();
   x._expand();
   return x;
 };
@@ -2370,7 +2370,7 @@ Credentials.fromExtendedPublicKey = function(xPubKey, source, entropySourceHex, 
 
   var x = new Credentials();
   x.xPubKey = xPubKey;
-  x.entropySource = Bitcore.crypto.Hash.sha256sha256(entropyBuffer).toString('hex');
+  x.entropySource = Digicore.crypto.Hash.sha256sha256(entropyBuffer).toString('hex');
   x.account = account;
   x.derivationStrategy = derivationStrategy;
   x.externalSource = source;
@@ -2392,7 +2392,7 @@ Credentials._xPubToCopayerId = function(xpub) {
 Credentials.prototype._hashFromEntropy = function(prefix, length) {
   $.checkState(prefix);
   var b = new Buffer(this.entropySource, 'hex');
-  var b2 = Bitcore.crypto.Hash.sha256hmac(b, new Buffer(prefix));
+  var b2 = Digicore.crypto.Hash.sha256hmac(b, new Buffer(prefix));
   return b2.slice(0, length);
 };
 
@@ -2408,11 +2408,11 @@ Credentials.prototype._expand = function() {
   }
 
   if (this.xPrivKey) {
-    var xPrivKey = new Bitcore.HDPrivateKey.fromString(this.xPrivKey);
+    var xPrivKey = new Digicore.HDPrivateKey.fromString(this.xPrivKey);
 
     // this extra derivation is not to share a non hardened xPubKey to the server.
     var addressDerivation = xPrivKey.derive(this.getBaseAddressDerivationPath());
-    this.xPubKey = (new Bitcore.HDPublicKey(addressDerivation)).toString();
+    this.xPubKey = (new Digicore.HDPublicKey(addressDerivation)).toString();
 
     var requestDerivation = xPrivKey.derive(Constants.PATHS.REQUEST_KEY);
     this.requestPrivKey = requestDerivation.privateKey.toString();
@@ -2420,10 +2420,10 @@ Credentials.prototype._expand = function() {
     var pubKey = requestDerivation.publicKey;
     this.requestPubKey = pubKey.toString();
 
-    this.entropySource = Bitcore.crypto.Hash.sha256(requestDerivation.privateKey.toBuffer()).toString('hex');
+    this.entropySource = Digicore.crypto.Hash.sha256(requestDerivation.privateKey.toBuffer()).toString('hex');
   } else {
     var seed = this._hashFromEntropy('reqPrivKey', 32);
-    var privKey = new Bitcore.PrivateKey(seed.toString('hex'), network);
+    var privKey = new Digicore.PrivateKey(seed.toString('hex'), network);
     this.requestPrivKey = privKey.toString();
     this.requestPubKey = privKey.toPublicKey().toString();
   }
@@ -2485,7 +2485,7 @@ Credentials.prototype.getBaseAddressDerivationPath = function() {
 
 Credentials.prototype.getDerivedXPrivKey = function() {
   var path = this.getBaseAddressDerivationPath();
-  return new Bitcore.HDPrivateKey(this.xPrivKey, this.network).derive(path);
+  return new Digicore.HDPrivateKey(this.xPrivKey, this.network).derive(path);
 };
 
 Credentials.prototype.addWalletPrivateKey = function(walletPrivKey) {
@@ -2629,7 +2629,7 @@ Credentials.fromOldCopayWallet = function(w) {
     // so it is safe to use them as seed for wallet's shared secret.
     var seed = w.publicKeyRing.copayersExtPubKeys.sort().join('');
     var seedBuf = new Buffer(seed);
-    var privKey = new Bitcore.PrivateKey.fromBuffer(Bitcore.crypto.Hash.sha256(seedBuf));
+    var privKey = new Digicore.PrivateKey.fromBuffer(Digicore.crypto.Hash.sha256(seedBuf));
     return privKey.toString();
   };
 
@@ -2647,16 +2647,16 @@ Credentials.fromOldCopayWallet = function(w) {
 
     if (isMe) {
       var path = Constants.PATHS.REQUEST_KEY;
-      requestDerivation = (new Bitcore.HDPrivateKey(credentials.xPrivKey))
+      requestDerivation = (new Digicore.HDPrivateKey(credentials.xPrivKey))
         .derive(path).hdPublicKey;
     } else {
       // this 
       var path = Constants.PATHS.REQUEST_KEY_AUTH;
-      requestDerivation = (new Bitcore.HDPublicKey(xPubStr)).derive(path);
+      requestDerivation = (new Digicore.HDPublicKey(xPubStr)).derive(path);
     }
 
     // Grab Copayer Name
-    var hd = new Bitcore.HDPublicKey(xPubStr).derive('m/2147483646/0/0');
+    var hd = new Digicore.HDPublicKey(xPubStr).derive('m/2147483646/0/0');
     var pubKey = hd.publicKey.toString('hex');
     var copayerName = w.publicKeyRing.nicknameFor[pubKey];
     if (isMe) {
@@ -2676,7 +2676,7 @@ Credentials.fromOldCopayWallet = function(w) {
 module.exports = Credentials;
 
 }).call(this,require("buffer").Buffer)
-},{"./common":5,"bitcore-lib":64,"bitcore-mnemonic":142,"buffer":193,"lodash":426,"preconditions":427,"sjcl":526}],8:[function(require,module,exports){
+},{"./common":5,"digicore-lib":64,"digicore-mnemonic":142,"buffer":193,"lodash":426,"preconditions":427,"sjcl":526}],8:[function(require,module,exports){
 'use strict';
 
 function ClientError(code, message) {
@@ -2719,7 +2719,7 @@ module.exports = errorObjects;
 
 },{"./clienterror":8,"lodash":426}],10:[function(require,module,exports){
 /**
- * The official client library for bitcore-wallet-service.
+ * The official client library for digicore-wallet-service.
  * @module Client
  */
 
@@ -2737,10 +2737,10 @@ client.Verifier = require('./verifier');
 client.Utils = require('./common/utils');
 client.sjcl = require('sjcl');
 
-// Expose bitcore
-client.Bitcore = require('bitcore-lib');
+// Expose digicore
+client.Digicore = require('digicore-lib');
 
-},{"./api":2,"./common/utils":6,"./verifier":13,"bitcore-lib":64,"sjcl":526}],11:[function(require,module,exports){
+},{"./api":2,"./common/utils":6,"./verifier":13,"digicore-lib":64,"sjcl":526}],11:[function(require,module,exports){
 var _ = require('lodash');
 /**
  * @desc
@@ -2872,8 +2872,8 @@ module.exports = logger;
 (function (process,Buffer){
 var $ = require('preconditions').singleton();
 
-var Bitcore = require('bitcore-lib');
-var BitcorePayPro = require('bitcore-payment-protocol');
+var Digicore = require('digicore-lib');
+var DigicorePayPro = require('digicore-payment-protocol');
 var PayPro = {};
 
 PayPro._nodeRequest = function(opts, cb) {
@@ -2958,7 +2958,7 @@ PayPro.get = function(opts, cb) {
 
   var http = getHttp(opts);
   opts.headers = opts.headers || {
-    'Accept': BitcorePayPro.PAYMENT_REQUEST_CONTENT_TYPE,
+    'Accept': DigicorePayPro.PAYMENT_REQUEST_CONTENT_TYPE,
     'Content-Type': 'application/octet-stream',
   };
 
@@ -2966,8 +2966,8 @@ PayPro.get = function(opts, cb) {
     if (err) return cb(err);
     var request, verified, signature, serializedDetails;
     try {
-      var body = BitcorePayPro.PaymentRequest.decode(dataBuffer);
-      request = (new BitcorePayPro()).makePaymentRequest(body);
+      var body = DigicorePayPro.PaymentRequest.decode(dataBuffer);
+      request = (new DigicorePayPro()).makePaymentRequest(body);
       signature = request.get('signature');
       serializedDetails = request.get('serialized_payment_details');
       // Verify the signature
@@ -2977,8 +2977,8 @@ PayPro.get = function(opts, cb) {
     }
 
     // Get the payment details
-    var decodedDetails = BitcorePayPro.PaymentDetails.decode(serializedDetails);
-    var pd = new BitcorePayPro();
+    var decodedDetails = DigicorePayPro.PaymentDetails.decode(serializedDetails);
+    var pd = new DigicorePayPro();
     pd = pd.makePaymentDetails(decodedDetails);
 
     var outputs = pd.get('outputs');
@@ -2998,7 +2998,7 @@ PayPro.get = function(opts, cb) {
     // is only an ArrayBuffer
     var buffer = new Buffer(new Uint8Array(output.get('script').buffer));
     var scriptBuf = buffer.slice(offset, limit);
-    var addr = new Bitcore.Address.fromScript(new Bitcore.Script(scriptBuf), network);
+    var addr = new Digicore.Address.fromScript(new Digicore.Script(scriptBuf), network);
 
     var md = pd.get('merchant_data');
 
@@ -3035,14 +3035,14 @@ PayPro.get = function(opts, cb) {
 PayPro._getPayProRefundOutputs = function(addrStr, amount) {
   amount = amount.toString(10);
 
-  var output = new BitcorePayPro.Output();
-  var addr = new Bitcore.Address(addrStr);
+  var output = new DigicorePayPro.Output();
+  var addr = new Digicore.Address(addrStr);
   var hash = addr.toObject().hash;
 
-  var s = new Bitcore.Script();
-  s.add(Bitcore.Opcode.OP_HASH160)
+  var s = new Digicore.Script();
+  s.add(Digicore.Opcode.OP_HASH160)
     .add(new Buffer(hash, 'hex'))
-    .add(Bitcore.Opcode.OP_EQUAL);
+    .add(Digicore.Opcode.OP_EQUAL);
 
   //  console.log('PayPro refund address set to:', addrStr,s);
   output.set('script', s.toBuffer());
@@ -3052,7 +3052,7 @@ PayPro._getPayProRefundOutputs = function(addrStr, amount) {
 
 
 PayPro._createPayment = function(merchant_data, rawTx, refundAddr, amountSat) {
-  var pay = new BitcorePayPro();
+  var pay = new DigicorePayPro();
   pay = pay.makePayment();
 
   if (merchant_data) {
@@ -3093,8 +3093,8 @@ PayPro.send = function(opts, cb) {
   var http = getHttp(opts);
   opts.method = 'POST';
   opts.headers = opts.headers || {
-    'Accept': BitcorePayPro.PAYMENT_ACK_CONTENT_TYPE,
-    'Content-Type': BitcorePayPro.PAYMENT_CONTENT_TYPE,
+    'Accept': DigicorePayPro.PAYMENT_ACK_CONTENT_TYPE,
+    'Content-Type': DigicorePayPro.PAYMENT_CONTENT_TYPE,
     // 'Content-Type': 'application/octet-stream',
   };
   opts.body = payment;
@@ -3104,8 +3104,8 @@ PayPro.send = function(opts, cb) {
     var memo;
     if (rawData) {
       try {
-        var data = BitcorePayPro.PaymentACK.decode(rawData);
-        var pp = new BitcorePayPro();
+        var data = DigicorePayPro.PaymentACK.decode(rawData);
+        var pp = new DigicorePayPro();
         var ack = pp.makePaymentACK(data);
         memo = ack.get('memo');
       } catch (e) {};
@@ -3117,13 +3117,13 @@ PayPro.send = function(opts, cb) {
 module.exports = PayPro;
 
 }).call(this,require('_process'),require("buffer").Buffer)
-},{"_process":399,"bitcore-lib":64,"bitcore-payment-protocol":153,"buffer":193,"http":390,"https":394,"preconditions":427}],13:[function(require,module,exports){
+},{"_process":399,"digicore-lib":64,"digicore-payment-protocol":153,"buffer":193,"http":390,"https":394,"preconditions":427}],13:[function(require,module,exports){
 /** @namespace Verifier */
 
 var $ = require('preconditions').singleton();
 var _ = require('lodash');
 
-var Bitcore = require('bitcore-lib');
+var Digicore = require('digicore-lib');
 
 var Common = require('./common');
 var Utils = Common.Utils;
@@ -3161,7 +3161,7 @@ Verifier.checkAddress = function(credentials, address) {
  */
 Verifier.checkCopayers = function(credentials, copayers) {
   $.checkState(credentials.walletPrivKey);
-  var walletPubKey = Bitcore.PrivateKey.fromString(credentials.walletPrivKey).toPublicKey().toString();
+  var walletPubKey = Digicore.PrivateKey.fromString(credentials.walletPrivKey).toPublicKey().toString();
 
   if (copayers.length != credentials.n) {
     log.error('Missing public keys in server response');
@@ -3280,7 +3280,7 @@ Verifier.checkTxProposal = function(credentials, txp, opts) {
 
 module.exports = Verifier;
 
-},{"./common":5,"./log":11,"bitcore-lib":64,"lodash":426,"preconditions":427}],14:[function(require,module,exports){
+},{"./common":5,"./log":11,"digicore-lib":64,"lodash":426,"preconditions":427}],14:[function(require,module,exports){
 (function (process){
 /*!
  * async
@@ -9859,74 +9859,74 @@ arguments[4][36][0].apply(exports,arguments)
 (function (global,Buffer){
 'use strict';
 
-var bitcore = module.exports;
+var digicore = module.exports;
 
 // module information
-bitcore.version = 'v' + require('./package.json').version;
-bitcore.versionGuard = function(version) {
+digicore.version = 'v' + require('./package.json').version;
+digicore.versionGuard = function(version) {
   if (version !== undefined) {
-    var message = 'More than one instance of bitcore-lib found. ' + 
-      'Please make sure to require bitcore-lib and check that submodules do' +
-      ' not also include their own bitcore-lib dependency.';
+    var message = 'More than one instance of digicore-lib found. ' + 
+      'Please make sure to require digicore-lib and check that submodules do' +
+      ' not also include their own digicore-lib dependency.';
     throw new Error(message);
   }
 };
-bitcore.versionGuard(global._bitcore);
-global._bitcore = bitcore.version;
+digicore.versionGuard(global._digicore);
+global._digicore = digicore.version;
 
 // crypto
-bitcore.crypto = {};
-bitcore.crypto.BN = require('./lib/crypto/bn');
-bitcore.crypto.ECDSA = require('./lib/crypto/ecdsa');
-bitcore.crypto.Hash = require('./lib/crypto/hash');
-bitcore.crypto.Random = require('./lib/crypto/random');
-bitcore.crypto.Point = require('./lib/crypto/point');
-bitcore.crypto.Signature = require('./lib/crypto/signature');
+digicore.crypto = {};
+digicore.crypto.BN = require('./lib/crypto/bn');
+digicore.crypto.ECDSA = require('./lib/crypto/ecdsa');
+digicore.crypto.Hash = require('./lib/crypto/hash');
+digicore.crypto.Random = require('./lib/crypto/random');
+digicore.crypto.Point = require('./lib/crypto/point');
+digicore.crypto.Signature = require('./lib/crypto/signature');
 
 // encoding
-bitcore.encoding = {};
-bitcore.encoding.Base58 = require('./lib/encoding/base58');
-bitcore.encoding.Base58Check = require('./lib/encoding/base58check');
-bitcore.encoding.BufferReader = require('./lib/encoding/bufferreader');
-bitcore.encoding.BufferWriter = require('./lib/encoding/bufferwriter');
-bitcore.encoding.Varint = require('./lib/encoding/varint');
+digicore.encoding = {};
+digicore.encoding.Base58 = require('./lib/encoding/base58');
+digicore.encoding.Base58Check = require('./lib/encoding/base58check');
+digicore.encoding.BufferReader = require('./lib/encoding/bufferreader');
+digicore.encoding.BufferWriter = require('./lib/encoding/bufferwriter');
+digicore.encoding.Varint = require('./lib/encoding/varint');
 
 // utilities
-bitcore.util = {};
-bitcore.util.buffer = require('./lib/util/buffer');
-bitcore.util.js = require('./lib/util/js');
-bitcore.util.preconditions = require('./lib/util/preconditions');
+digicore.util = {};
+digicore.util.buffer = require('./lib/util/buffer');
+digicore.util.js = require('./lib/util/js');
+digicore.util.preconditions = require('./lib/util/preconditions');
 
 // errors thrown by the library
-bitcore.errors = require('./lib/errors');
+digicore.errors = require('./lib/errors');
 
 // main bitcoin library
-bitcore.Address = require('./lib/address');
-bitcore.Block = require('./lib/block');
-bitcore.MerkleBlock = require('./lib/block/merkleblock');
-bitcore.BlockHeader = require('./lib/block/blockheader');
-bitcore.HDPrivateKey = require('./lib/hdprivatekey.js');
-bitcore.HDPublicKey = require('./lib/hdpublickey.js');
-bitcore.Networks = require('./lib/networks');
-bitcore.Opcode = require('./lib/opcode');
-bitcore.PrivateKey = require('./lib/privatekey');
-bitcore.PublicKey = require('./lib/publickey');
-bitcore.Script = require('./lib/script');
-bitcore.Transaction = require('./lib/transaction');
-bitcore.URI = require('./lib/uri');
-bitcore.Unit = require('./lib/unit');
+digicore.Address = require('./lib/address');
+digicore.Block = require('./lib/block');
+digicore.MerkleBlock = require('./lib/block/merkleblock');
+digicore.BlockHeader = require('./lib/block/blockheader');
+digicore.HDPrivateKey = require('./lib/hdprivatekey.js');
+digicore.HDPublicKey = require('./lib/hdpublickey.js');
+digicore.Networks = require('./lib/networks');
+digicore.Opcode = require('./lib/opcode');
+digicore.PrivateKey = require('./lib/privatekey');
+digicore.PublicKey = require('./lib/publickey');
+digicore.Script = require('./lib/script');
+digicore.Transaction = require('./lib/transaction');
+digicore.URI = require('./lib/uri');
+digicore.Unit = require('./lib/unit');
 
 // dependencies, subject to change
-bitcore.deps = {};
-bitcore.deps.bnjs = require('bn.js');
-bitcore.deps.bs58 = require('bs58');
-bitcore.deps.Buffer = Buffer;
-bitcore.deps.elliptic = require('elliptic');
-bitcore.deps._ = require('lodash');
+digicore.deps = {};
+digicore.deps.bnjs = require('bn.js');
+digicore.deps.bs58 = require('bs58');
+digicore.deps.Buffer = Buffer;
+digicore.deps.elliptic = require('elliptic');
+digicore.deps._ = require('lodash');
 
 // Internal usage, exposed for testing/advanced tweaking
-bitcore._HDKeyCache = require('./lib/hdkeycache');
-bitcore.Transaction.sighash = require('./lib/transaction/sighash');
+digicore._HDKeyCache = require('./lib/hdkeycache');
+digicore.Transaction.sighash = require('./lib/transaction/sighash');
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {},require("buffer").Buffer)
 },{"./lib/address":65,"./lib/block":68,"./lib/block/blockheader":67,"./lib/block/merkleblock":69,"./lib/crypto/bn":70,"./lib/crypto/ecdsa":71,"./lib/crypto/hash":72,"./lib/crypto/point":73,"./lib/crypto/random":74,"./lib/crypto/signature":75,"./lib/encoding/base58":76,"./lib/encoding/base58check":77,"./lib/encoding/bufferreader":78,"./lib/encoding/bufferwriter":79,"./lib/encoding/varint":80,"./lib/errors":81,"./lib/hdkeycache":83,"./lib/hdprivatekey.js":84,"./lib/hdpublickey.js":85,"./lib/networks":86,"./lib/opcode":87,"./lib/privatekey":88,"./lib/publickey":89,"./lib/script":90,"./lib/transaction":93,"./lib/transaction/sighash":101,"./lib/unit":105,"./lib/uri":106,"./lib/util/buffer":107,"./lib/util/js":108,"./lib/util/preconditions":109,"./package.json":141,"bn.js":110,"bs58":111,"buffer":193,"elliptic":113,"lodash":426}],65:[function(require,module,exports){
@@ -13065,28 +13065,28 @@ var traverseRoot = function(parent, errorsDefinition) {
 };
 
 
-var bitcore = {};
-bitcore.Error = function() {
+var digicore = {};
+digicore.Error = function() {
   this.message = 'Internal error';
   this.stack = this.message + '\n' + (new Error()).stack;
 };
-bitcore.Error.prototype = Object.create(Error.prototype);
-bitcore.Error.prototype.name = 'bitcore.Error';
+digicore.Error.prototype = Object.create(Error.prototype);
+digicore.Error.prototype.name = 'digicore.Error';
 
 
 var data = require('./spec');
-traverseRoot(bitcore.Error, data);
+traverseRoot(digicore.Error, data);
 
-module.exports = bitcore.Error;
+module.exports = digicore.Error;
 
 module.exports.extend = function(spec) {
-  return traverseNode(bitcore.Error, spec);
+  return traverseNode(digicore.Error, spec);
 };
 
 },{"./spec":82,"lodash":426}],82:[function(require,module,exports){
 'use strict';
 
-var docsURL = 'http://bitcore.io/';
+var docsURL = 'http://digicore.io/';
 
 module.exports = [{
   name: 'InvalidB58Char',
@@ -13907,9 +13907,9 @@ var Network = require('./networks');
 var Point = require('./crypto/point');
 var PublicKey = require('./publickey');
 
-var bitcoreErrors = require('./errors');
-var errors = bitcoreErrors;
-var hdErrors = bitcoreErrors.HDPublicKey;
+var digicoreErrors = require('./errors');
+var errors = digicoreErrors;
+var hdErrors = digicoreErrors.HDPublicKey;
 var assert = require('assert');
 
 var JSUtil = require('./util/js');
@@ -19262,7 +19262,7 @@ Transaction.prototype.checkedSerialize = function(opts) {
   var serializationError = this.getSerializationError(opts);
   if (serializationError) {
     serializationError.message += ' Use Transaction#uncheckedSerialize if you want to skip security checks. ' +
-      'See http://bitcore.io/guide/transaction.html#Serialization for more info.';
+      'See http://digicore.io/guide/transaction.html#Serialization for more info.';
     throw serializationError;
   }
   return this.uncheckedSerialize();
@@ -19283,7 +19283,7 @@ Transaction.prototype.invalidSatoshis = function() {
  * broadcast this transaction.
  *
  * @param {Object} opts allows to skip certain tests. {@see Transaction#serialize}
- * @return {bitcore.Error}
+ * @return {digicore.Error}
  */
 Transaction.prototype.getSerializationError = function(opts) {
   opts = opts || {};
@@ -19591,7 +19591,7 @@ Transaction.prototype._newTransaction = function() {
  * to add an input, for more control, use @{link Transaction#addInput}.
  *
  * Can receive, as output information, the output of bitcoind's `listunspent` command,
- * and a slightly fancier format recognized by bitcore:
+ * and a slightly fancier format recognized by digicore:
  *
  * ```
  * {
@@ -19602,8 +19602,8 @@ Transaction.prototype._newTransaction = function() {
  *  satoshis: 1020000
  * }
  * ```
- * Where `address` can be either a string or a bitcore Address object. The
- * same is true for `script`, which can be a string or a bitcore Script.
+ * Where `address` can be either a string or a digicore Address object. The
+ * same is true for `script`, which can be a string or a digicore Script.
  *
  * Beware that this resets all the signatures for inputs (in further versions,
  * SIGHASH_SINGLE or SIGHASH_NONE signatures will not be reset).
@@ -20647,7 +20647,7 @@ var Address = require('./address');
 var Unit = require('./unit');
 
 /**
- * Bitcore URI
+ * Digicore URI
  *
  * Instantiate an URI from a bitcoin URI String or an Object. An URI instance
  * can be created with a bitcoin uri string or an object. All instances of
@@ -28978,7 +28978,7 @@ module.exports.WordArray = X64WordArray
 
 },{"./word-array":139}],141:[function(require,module,exports){
 module.exports={
-  "name": "bitcore-lib",
+  "name": "digicore-lib",
   "version": "0.13.10",
   "description": "A pure and powerful JavaScript Bitcoin library.",
   "author": {
@@ -29056,7 +29056,7 @@ module.exports={
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/bitpay/bitcore-lib.git"
+    "url": "git+https://github.com/bitpay/digicore-lib.git"
   },
   "browser": {
     "request": "browser-request"
@@ -29071,7 +29071,7 @@ module.exports={
     "sha512": "=0.0.1"
   },
   "devDependencies": {
-    "bitcore-build": "github:bitpay/bitcore-build",
+    "digicore-build": "github:bitpay/digicore-build",
     "brfs": "^1.2.0",
     "chai": "^1.10.0",
     "gulp": "^3.8.10",
@@ -29080,12 +29080,12 @@ module.exports={
   "license": "MIT",
   "gitHead": "543591f56d42395091c3d975390d1437760f6a99",
   "bugs": {
-    "url": "https://github.com/bitpay/bitcore-lib/issues"
+    "url": "https://github.com/bitpay/digicore-lib/issues"
   },
-  "homepage": "https://github.com/bitpay/bitcore-lib#readme",
-  "_id": "bitcore-lib@0.13.10",
+  "homepage": "https://github.com/bitpay/digicore-lib#readme",
+  "_id": "digicore-lib@0.13.10",
   "_shasum": "d100d0bd827cf905f8994f996b8581e156bfe8b8",
-  "_from": "bitcore-lib@>=0.13.7 <0.14.0",
+  "_from": "digicore-lib@>=0.13.7 <0.14.0",
   "_npmVersion": "2.14.7",
   "_nodeVersion": "4.2.1",
   "_npmUser": {
@@ -29112,10 +29112,10 @@ module.exports={
   ],
   "dist": {
     "shasum": "d100d0bd827cf905f8994f996b8581e156bfe8b8",
-    "tarball": "http://registry.npmjs.org/bitcore-lib/-/bitcore-lib-0.13.10.tgz"
+    "tarball": "http://registry.npmjs.org/digicore-lib/-/digicore-lib-0.13.10.tgz"
   },
   "directories": {},
-  "_resolved": "https://registry.npmjs.org/bitcore-lib/-/bitcore-lib-0.13.10.tgz",
+  "_resolved": "https://registry.npmjs.org/digicore-lib/-/digicore-lib-0.13.10.tgz",
   "readme": "ERROR: No README data found!"
 }
 
@@ -29127,7 +29127,7 @@ module.exports = require('./lib/mnemonic');
 
 var spec = {
   name: 'Mnemonic',
-  message: 'Internal Error on bitcore-mnemonic module {0}',
+  message: 'Internal Error on digicore-mnemonic module {0}',
   errors: [{
     name: 'InvalidEntropy',
     message: 'Entropy length must be an even multiple of 11 bits: {0}'
@@ -29140,24 +29140,24 @@ var spec = {
   }]
 };
 
-module.exports = require('bitcore-lib').errors.extend(spec);
+module.exports = require('digicore-lib').errors.extend(spec);
 
-},{"bitcore-lib":64}],144:[function(require,module,exports){
+},{"digicore-lib":64}],144:[function(require,module,exports){
 (function (Buffer){
 'use strict';
 
-var bitcore = require('bitcore-lib');
-var BN = bitcore.crypto.BN;
+var digicore = require('digicore-lib');
+var BN = digicore.crypto.BN;
 var unorm = require('unorm');
-var _ = bitcore.deps._;
+var _ = digicore.deps._;
 
 var pbkdf2 = require('./pbkdf2');
 var errors = require('./errors');
 
-var Hash = bitcore.crypto.Hash;
-var Random = bitcore.crypto.Random;
+var Hash = digicore.crypto.Hash;
+var Random = digicore.crypto.Random;
 
-var $ = bitcore.util.preconditions;
+var $ = digicore.util.preconditions;
 
 
 /**
@@ -29201,7 +29201,7 @@ var Mnemonic = function(data, wordlist) {
   } else if (_.isNumber(data)) {
     ent = data;
   } else if (data) {
-    throw new bitcore.errors.InvalidArgument('data', 'Must be a Buffer, a string or an integer');
+    throw new digicore.errors.InvalidArgument('data', 'Must be a Buffer, a string or an integer');
   }
   ent = ent || 128;
 
@@ -29223,7 +29223,7 @@ var Mnemonic = function(data, wordlist) {
     throw new errors.InvalidMnemonic(phrase);
   }
   if (ent % 32 !== 0 || ent < 128) {
-    throw new bitcore.errors.InvalidArgument('ENT', 'Values must be ENT > 128 and ENT % 32 == 0');
+    throw new digicore.errors.InvalidArgument('ENT', 'Values must be ENT > 128 and ENT % 32 == 0');
   }
 
   phrase = phrase || Mnemonic._mnemonic(ent, wordlist);
@@ -29350,7 +29350,7 @@ Mnemonic.fromSeed = function(seed, wordlist) {
  */
 Mnemonic.prototype.toHDPrivateKey = function(passphrase, network) {
   var seed = this.toSeed(passphrase);
-  return bitcore.HDPrivateKey.fromSeed(seed, network);
+  return digicore.HDPrivateKey.fromSeed(seed, network);
 };
 
 /**
@@ -29441,7 +29441,7 @@ Mnemonic._entropyChecksum = function(entropy) {
 module.exports = Mnemonic;
 
 }).call(this,require("buffer").Buffer)
-},{"./errors":143,"./pbkdf2":145,"./words":149,"bitcore-lib":64,"buffer":193,"unorm":152}],145:[function(require,module,exports){
+},{"./errors":143,"./pbkdf2":145,"./words":149,"digicore-lib":64,"buffer":193,"unorm":152}],145:[function(require,module,exports){
 (function (Buffer){
 'use strict';
 
@@ -30229,17 +30229,17 @@ module.exports = PaymentProtocol;
 (function (Buffer){
 'use strict';
 
-var bitcore = require('bitcore-lib');
+var digicore = require('digicore-lib');
 var protobufjs = require('protobufjs/dist/ProtoBuf');
 var RootCerts = require('./rootcerts');
 var rfc3280 = require('asn1.js/rfc/3280');
 
-var PublicKey = bitcore.PublicKey;
-var PrivateKey = bitcore.PrivateKey;
-var Signature = bitcore.crypto.Signature;
-var ECDSA = bitcore.crypto.ECDSA;
-var sha256sha256 = bitcore.crypto.Hash.sha256sha256;
-var varintBufNum = bitcore.encoding.BufferWriter.varintBufNum;
+var PublicKey = digicore.PublicKey;
+var PrivateKey = digicore.PrivateKey;
+var Signature = digicore.crypto.Signature;
+var ECDSA = digicore.crypto.ECDSA;
+var sha256sha256 = digicore.crypto.Hash.sha256sha256;
+var varintBufNum = digicore.encoding.BufferWriter.varintBufNum;
 
 // BIP 70 - payment protocol
 function PaymentProtocol() {
@@ -30723,7 +30723,7 @@ PaymentProtocol.trusted = RootCerts.trusted;
 module.exports = PaymentProtocol;
 
 }).call(this,require("buffer").Buffer)
-},{"./rootcerts":156,"asn1.js/rfc/3280":170,"bitcore-lib":64,"buffer":193,"protobufjs/dist/ProtoBuf":172}],155:[function(require,module,exports){
+},{"./rootcerts":156,"asn1.js/rfc/3280":170,"digicore-lib":64,"buffer":193,"protobufjs/dist/ProtoBuf":172}],155:[function(require,module,exports){
 module.exports={
   "Equifax Secure CA": "-----BEGIN CERTIFICATE-----\nMIIDIDCCAomgAwIBAgIENd70zzANBgkqhkiG9w0BAQUFADBOMQswCQYDVQQGEwJVUzEQMA4G\nA1UEChMHRXF1aWZheDEtMCsGA1UECxMkRXF1aWZheCBTZWN1cmUgQ2VydGlmaWNhdGUgQXV0\naG9yaXR5MB4XDTk4MDgyMjE2NDE1MVoXDTE4MDgyMjE2NDE1MVowTjELMAkGA1UEBhMCVVMx\nEDAOBgNVBAoTB0VxdWlmYXgxLTArBgNVBAsTJEVxdWlmYXggU2VjdXJlIENlcnRpZmljYXRl\nIEF1dGhvcml0eTCBnzANBgkqhkiG9w0BAQEFAAOBjQAwgYkCgYEAwV2xWGcIYu6gmi0fCG2R\nFGiYCh7+2gRvE4RiIcPRfM6fBeC4AfBONOziipUEZKzxa1NfBbPLZ4C/QgKO/t0BCezhABRP\n/PvwDN1Dulsr4R+AcJkVV5MW8Q+XarfCaCMczE1ZMKxRHjuvK9buY0V7xdlfUNLjUA86iOe/\nFP3gx7kCAwEAAaOCAQkwggEFMHAGA1UdHwRpMGcwZaBjoGGkXzBdMQswCQYDVQQGEwJVUzEQ\nMA4GA1UEChMHRXF1aWZheDEtMCsGA1UECxMkRXF1aWZheCBTZWN1cmUgQ2VydGlmaWNhdGUg\nQXV0aG9yaXR5MQ0wCwYDVQQDEwRDUkwxMBoGA1UdEAQTMBGBDzIwMTgwODIyMTY0MTUxWjAL\nBgNVHQ8EBAMCAQYwHwYDVR0jBBgwFoAUSOZo+SvSspXXR9gjIBBPM5iQn9QwHQYDVR0OBBYE\nFEjmaPkr0rKV10fYIyAQTzOYkJ/UMAwGA1UdEwQFMAMBAf8wGgYJKoZIhvZ9B0EABA0wCxsF\nVjMuMGMDAgbAMA0GCSqGSIb3DQEBBQUAA4GBAFjOKer89961zgK5F7WF0bnj4JXMJTENAKaS\nbn+2kmOeUJXRmm/kEd5jhW6Y7qj/WsjTVbJmcVfewCHrPSqnI0kBBIZCe/zuf6IWUrVnZ9NA\n2zsmWLIodz2uFHdh1voqZiegDfqnc1zqcPGUIWVEX/r87yloqaKHee9570+sB3c4\n-----END CERTIFICATE-----\n",
   "GlobalSign Root CA": "-----BEGIN CERTIFICATE-----\nMIIDdTCCAl2gAwIBAgILBAAAAAABFUtaw5QwDQYJKoZIhvcNAQEFBQAwVzELMAkGA1UEBhMC\nQkUxGTAXBgNVBAoTEEdsb2JhbFNpZ24gbnYtc2ExEDAOBgNVBAsTB1Jvb3QgQ0ExGzAZBgNV\nBAMTEkdsb2JhbFNpZ24gUm9vdCBDQTAeFw05ODA5MDExMjAwMDBaFw0yODAxMjgxMjAwMDBa\nMFcxCzAJBgNVBAYTAkJFMRkwFwYDVQQKExBHbG9iYWxTaWduIG52LXNhMRAwDgYDVQQLEwdS\nb290IENBMRswGQYDVQQDExJHbG9iYWxTaWduIFJvb3QgQ0EwggEiMA0GCSqGSIb3DQEBAQUA\nA4IBDwAwggEKAoIBAQDaDuaZjc6j40+Kfvvxi4Mla+pIH/EqsLmVEQS98GPR4mdmzxzdzxtI\nK+6NiY6arymAZavpxy0Sy6scTHAHoT0KMM0VjU/43dSMUBUc71DuxC73/OlS8pF94G3VNTCO\nXkNz8kHp1Wrjsok6Vjk4bwY8iGlbKk3Fp1S4bInMm/k8yuX9ifUSPJJ4ltbcdG6TRGHRjcdG\nsnUOhugZitVtbNV4FpWi6cgKOOvyJBNPc1STE4U6G7weNLWLBYy5d4ux2x8gkasJU26Qzns3\ndLlwR5EiUWMWea6xrkEmCMgZK9FGqkjWZCrXgzT/LCrBbBlDSgeF59N89iFo7+ryUp9/k5DP\nAgMBAAGjQjBAMA4GA1UdDwEB/wQEAwIBBjAPBgNVHRMBAf8EBTADAQH/MB0GA1UdDgQWBBRg\ne2YaRQ2XyolQL30EzTSo//z9SzANBgkqhkiG9w0BAQUFAAOCAQEA1nPnfE920I2/7LqivjTF\nKDK1fPxsnCwrvQmeU79rXqoRSLblCKOzyj1hTdNGCbM+w6DjY1Ub8rrvrTnhQ7k4o+YviiY7\n76BQVvnGCv04zcQLcFGUl5gE38NflNUVyRRBnMRddWQVDf9VMOyGj/8N7yy5Y0b2qvzfvGn9\nLhJIZJrglfCm7ymPAbEVtQwdpf5pLGkkeB6zpxxxYu7KyJesF12KwvhHhm4qxFYxldBniYUr\n+WymXUadDKqC5JlR3XC321Y9YeRq4VzW9v493kHMB65jUr9TU/Qr6cf9tveCX4XSQRjbgbME\nHMUfpIBvFSDJ3gyICh3WZlXi/EjJKSZp4A==\n-----END CERTIFICATE-----\n",
@@ -106986,8 +106986,8 @@ sjcl.misc.cachedPbkdf2=function(a,b){var c=sjcl.misc.ca,d;b=b||{};d=b.iter||1E3;
 
 },{"crypto":197}],527:[function(require,module,exports){
 module.exports={
-  "name": "bitcore-wallet-client",
-  "description": "Client for bitcore-wallet-service",
+  "name": "digicore-wallet-client",
+  "description": "Client for digicore-wallet-service",
   "author": "BitPay Inc",
   "version": "1.1.10",
   "license": "MIT",
@@ -106997,23 +106997,23 @@ module.exports={
     "multisig",
     "wallet",
     "client",
-    "bitcore"
+    "digicore"
   ],
   "engine": "node >= 0.12.0",
   "main": "index.js",
   "repository": {
-    "url": "git@github.com:bitpay/bitcore-wallet-client.git",
+    "url": "git@github.com:bitpay/digicore-wallet-client.git",
     "type": "git"
   },
   "bugs": {
-    "url": "https://github.com/bitpay/bitcore-wallet-client/issues"
+    "url": "https://github.com/bitpay/digicore-wallet-client/issues"
   },
   "dependencies": {
     "async": "^0.9.0",
     "bip38": "^1.3.0",
-    "bitcore-lib": "^0.13.7",
-    "bitcore-mnemonic": "~1.0.0",
-    "bitcore-payment-protocol": "~1.0.0",
+    "digicore-lib": "^0.13.7",
+    "digicore-mnemonic": "~1.0.0",
+    "digicore-payment-protocol": "~1.0.0",
     "browser-request": "^0.3.3",
     "json-stable-stringify": "^1.0.0",
     "lodash": "^3.3.1",
@@ -107022,7 +107022,7 @@ module.exports={
     "sjcl": "^1.0.2"
   },
   "devDependencies": {
-    "bitcore-wallet-service": "~1.3.1",
+    "digicore-wallet-service": "~1.3.1",
     "browserify": "^9.0.3",
     "chai": "^1.9.1",
     "coveralls": "^2.11.2",
