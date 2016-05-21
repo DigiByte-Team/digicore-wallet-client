@@ -1,7 +1,7 @@
 {
   "name": "digicore-wallet-client",
   "main": "index.js",
-  "version": "1.1.10",
+  "version": "1.1.11",
   "homepage": "https://github.com/digibyte-team/digicore-wallet-client",
   "authors": ["BitPay Inc"],
   "description": "Client for digicore-wallet-service",
